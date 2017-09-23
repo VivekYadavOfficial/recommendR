@@ -1,0 +1,141 @@
+---
+title: "Recommender System in R"
+author: "Vivek Yadav"
+output:
+  html_notebook: default
+  html_document: default
+---
+
+This project is create by me (@VivekYadavOfficial) as a part of my Data Science learning process. This notebook provides description along with all the codes of the project.
+
+This project is developed using R and recommenderlab package. For this project, I used Movielens dataset provided by GroupLens. They also have BookLens dataset if you want to build a book recommender system but since they both are the similar in concept, I'm just building one.
+
+I used the 100k Movielens dataset which provides ratings on 1680 items by 943 users.
+
+Now let's get into building the recommender
+
+
+First we install the required packages
+```{r}
+#install required packages
+install.packages("data.table")
+install.packages("recommenderlab")
+```
+
+Now load the required packages
+```{r}
+#load required packages
+library(data.table)
+library(recommenderlab)
+```
+
+Now download the MovieLens data from [here](https://grouplens.org/datasets/movielens/). 100K data is enough, but if you want, you can go for 1M dataset.
+
+After downloading the data, extract the files in a folder. Now remember the path of the files.
+
+Set your working directory.
+```{r}
+#setwd("")
+```
+
+Now we will load the data into a data frame using fread function for fast reading of the data.
+```{r}
+#Load Movielens 100k data (ua.base)
+train <- fread("C:/users/Vivek/Desktop/100k/ml-100k/ua.base", header=FALSE, sep='\t', col.names = c("userid","movieid","rating","timestamp"))
+```
+
+We will see what dataset holds. We will use summary statistics now.
+```{r}
+#Summary statistics of data
+summary(train)
+```
+
+The data has 4 columns namely userid, movieid, rating and timestamp. Userid is unique user id assigned to each users. Similarly movies are assigned unique movieid. Rating provides the information for each user's rating for the specific movie. Timestamp provides the some timestamp assigned for each rating according to tthe time at which it was rated.
+
+In this dataset, each user has rated at least 20 movies.
+
+Now we will move ahead and convert the data into the realRatingMatrix format provided by recommenderlab package. This object holds the information for data structure for recommender.
+```{r}
+#Convert the the loaded train data into a "realRatingMatrix" object
+train.data <- as(train[,-4],"realRatingMatrix")
+```
+
+We have here removed the timestamp section.
+
+Let's go ahead and visualize the data we created as realRatingMatrix
+```{r}
+#Visualize data
+image(train.data)
+```
+
+Recommenderlab package provides option for normalizing data which can be helful many times depending on the problem and the dataset.
+
+We will normalize the data
+```{r}
+#Normalizing the data. You can ignore this depending on your choice
+train.nm <- normalize(train.data)
+```
+
+Now we will go ahead and visualize the normalized data
+```{r}
+#Visualize data after normalization
+image(train.nm)
+```
+
+You will find small difference if you pay very close attention to both the plots. Now you will notice that now ratings range from -4 to 4 instead of 0 to 4. Normalization is done by subtracting row mean of ratings from all the ratings. It helps in removing bias of ratings.
+
+Now in sections to be followed I will train and evaluate the models.
+
+recommenderlab package provides the option to build a evaluation scheme to evaluate the models.
+
+We will now define the evaluation scheme.
+```{r}
+#set seed
+seed(89)
+#Defining evaluation scheme (criteria for evaluating recommender) 
+eval <- evaluationScheme(train.data, method="split", train=0.9, given=10, goodRating=3)
+```
+
+In the evaluation scheme, we defined the 90% data for training and 10% for testing. Here you can define the minimum rating above which the movie will be cosidered good by the user. I have defined it to be 3.
+
+Now we will train the recommenders. I'm only building User-Based Collaborative Filtering and Item-Based Collaborative Filtering recommenders. There are other recommenders like Popular but I'm not going to build them. You can play around with codes to see how they work.
+
+```{r}
+#Training UBCF(user-based collaborative filtering) recommender
+r.ubcf <- Recommender(getData(eval,"train"),"UBCF")
+```
+
+Remember that IBCF model take a lot of time to build, so for beginning purpose, you shouldn't give it very large data, especially if you don't have a lot of computing power.
+```{r}
+#Training IBCF(item-based collaborative filtering) recommender
+r.ibcf <- Recommender(getData(eval,"train"),"IBCF")
+```
+
+My computer trained UBCF almost instantly but took around 25 seconds to train IBCF on 100K data.
+
+Now we have trained models ready, we will predict with them for new users. Here we will train using the type ratings. This means, it will look for movies with similar ratings to predict rather than looking for topN items preferred by most users. If you set 'type' to "topN", you will get recommendations based on topN criterion. 
+```{r}
+#Prediction by UBCF recommender with the type "ratings"
+p.ubcf <- predict(r.ubcf, getData(eval,"known"), type="ratings")
+```
+
+```{r}
+#Prediction by IBCF recommender with the type "ratings"
+p.ibcf <- predict(r.ibcf, getData(eval,"known"), type="ratings")
+```
+
+Now that we have predicted using both the algorithms, we will evaluate the errors.
+```{r}
+#error calculation for both types of recommenders and combining them in single data.frame
+error <- rbind(UBCF=calcPredictionAccuracy(p.ubcf, getData(eval,"unknown")), IBCF=calcPredictionAccuracy(p.ibcf, getData(eval,"unknown")))
+```
+
+error is a dataframe which we created by combining errors of both the models. It contains RMSE(Root Mean Squared Error), MSE(Mean Squared Error) and MAE(Mean Average error). Let's see it to understand which algorithm performs better.
+```{r}
+#print error to compare prediction accuracy of both the recommenders
+error
+```
+
+We can see here, RMSE (which is frequently used for error measurement) for UBCF is lower than that for the IBCF. It means here User-Based Collaborative Filtering performs better than the Item-Based Collaborative Filtering despite taking very less time to train.
+
+Now, I conclude this notebook here. Feel free to play around the codes and explore on your own different things.
